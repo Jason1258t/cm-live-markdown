@@ -106,7 +106,7 @@ export const liveMarkdownTheme = EditorView.baseTheme({
   },
 
   // картинки
-  '.lmd-img': { maxWidth: '100%', maxHeight: '480px', display: 'inline-block', verticalAlign: 'top' },
+  '.lmd-img': { display: 'block', maxWidth: '100%', maxHeight: '480px', margin: '6px 0' },
   '.lmd-img-note': { color: 'var(--lmd-faint, #999)', fontStyle: 'italic' },
 
   // таблица, отрисованная вне курсора
