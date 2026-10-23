@@ -178,7 +178,7 @@ liveMarkdown({
 }
 ```
 
-Классы для своего CSS: `lmd-h1`…`lmd-h6`, `lmd-strong`, `lmd-em`, `lmd-strike`, `lmd-code`, `lmd-link`, `lmd-codeblock`, `lmd-quote`, `lmd-hr`, `lmd-table`, `lmd-bullet`, `lmd-check`, `lmd-done`, `lmd-img`, `lmd-img-note`, `lmd-table-widget`, `lmd-token-src`.
+Классы для своего CSS: `lmd-h1`…`lmd-h6`, `lmd-strong`, `lmd-em`, `lmd-strike`, `lmd-code`, `lmd-link`, `lmd-codeblock`, `lmd-quote`, `lmd-hr`, `lmd-table`, `lmd-bullet`, `lmd-check`, `lmd-done`, `lmd-img-box`, `lmd-img`, `lmd-img-note`, `lmd-table-widget`, `lmd-token-src`.
 
 ## Команды отдельно
 

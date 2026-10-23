@@ -179,7 +179,13 @@ class ImageWidget extends WidgetType {
       span.textContent = text;
       return span;
     };
-    if (this.opts.pending?.(this.src)) return note(this.phrases.imageLoading);
+    // Корень виджета не подменяем: CodeMirror принял бы новый узел за набранный текст и вписал подпись в документ
+    const box = document.createElement('span');
+    box.className = 'lmd-img-box';
+    if (this.opts.pending?.(this.src)) {
+      box.append(note(this.phrases.imageLoading));
+      return box;
+    }
     const img = document.createElement('img');
     img.className = 'lmd-img';
     img.alt = this.alt;
@@ -189,7 +195,8 @@ class ImageWidget extends WidgetType {
     Promise.resolve()
       .then(() => (this.opts.resolve ? this.opts.resolve(this.src) : this.src))
       .then((url) => (img.src = url), missing);
-    return img;
+    box.append(img);
+    return box;
   }
   get estimatedHeight() {
     return 240;
