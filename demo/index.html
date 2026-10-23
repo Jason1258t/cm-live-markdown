@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>cm-live-markdown — демо</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 24px 16px;
+        background: Canvas;
+        color: CanvasText;
+      }
+      main {
+        max-width: 820px;
+        margin: 0 auto;
+      }
+      .editor {
+        height: 70vh;
+        border: 1px solid rgba(127, 127, 127, 0.4);
+        border-radius: 8px;
+        overflow: hidden;
+        --lmd-font-size: 15px;
+      }
+      .editor .lmd {
+        height: 100%;
+      }
+      .tag {
+        background: rgba(80, 140, 255, 0.18);
+        border-radius: 10px;
+        padding: 0 7px;
+        font-size: 0.9em;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin: 12px 0;
+        font-size: 13px;
+        opacity: 0.8;
+      }
+      pre {
+        white-space: pre-wrap;
+        font-size: 12px;
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>cm-live-markdown</h1>
+      <div class="row">
+        <span>Tab / Shift+Tab, Ctrl+B / I / E / K, Ctrl+Shift+X, Ctrl+Enter. Картинки можно вставить из буфера.</span>
+      </div>
+      <div id="root"></div>
+    </main>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,87 @@
+{
+  "name": "cm-live-markdown",
+  "version": "0.1.0",
+  "description": "Живой Markdown в духе Obsidian Live Preview для CodeMirror 6: разметка прячется вне курсора, списки, чекбоксы, таблицы, сочетания клавиш. Ядро без React и тонкая обёртка для React.",
+  "keywords": [
+    "codemirror",
+    "codemirror6",
+    "markdown",
+    "live-preview",
+    "wysiwyg",
+    "obsidian",
+    "editor",
+    "react"
+  ],
+  "author": "Jason <ivandomogatskij@gmail.com>",
+  "homepage": "https://github.com/Jason1258t/cm-live-markdown#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jason1258t/cm-live-markdown.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Jason1258t/cm-live-markdown/issues"
+  },
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./commands": {
+      "types": "./dist/commands.d.ts",
+      "default": "./dist/commands.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "demo": "vite demo",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "peerDependencies": {
+    "@codemirror/commands": "^6.3.0",
+    "@codemirror/lang-markdown": "^6.2.0",
+    "@codemirror/language": "^6.10.0",
+    "@codemirror/state": "^6.4.0",
+    "@codemirror/view": "^6.26.0",
+    "@lezer/common": "^1.2.0",
+    "react": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
+    "@lezer/common": "^1.5.4",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "prettier": "^3.9.9",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}
