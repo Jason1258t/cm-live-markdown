@@ -248,6 +248,8 @@ const INLINE: Record<string, string> = {
   Link: 'lmd-link',
 };
 const HIDDEN_MARKS = new Set(['EmphasisMark', 'StrikethroughMark', 'LinkMark', 'URL']);
+/** Адрес внутри [текст](адрес) или ![](адрес) — служебная часть, прячется вне курсора */
+const isLinkLike = (node: SyntaxNode | null) => node?.name === 'Link' || node?.name === 'Image';
 
 interface BuildContext {
   tokens: readonly InlineToken[];
@@ -329,6 +331,11 @@ function build(view: EditorView, ctx: BuildContext): DecorationSet {
         if (INLINE[name]) {
           add(node.from, node.to, mark(INLINE[name]));
           if (name === 'InlineCode') codeRanges.push([node.from, node.to]);
+          return;
+        }
+        // Голая ссылка (https://…, www.…) и <https://…> — сам адрес и есть текст: не прячем, оформляем ссылкой
+        if (name === 'URL' && !isLinkLike(parent)) {
+          add(node.from, node.to, mark('lmd-link'));
           return;
         }
         if ((HIDDEN_MARKS.has(name) || (name === 'CodeMark' && parent?.name === 'InlineCode')) && parent) {
@@ -639,9 +646,14 @@ export function liveMarkdown(options: LiveMarkdownOptions = {}): Extension {
             const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
             if (pos === null) return false;
             for (let n: SyntaxNode | null = syntaxTree(view.state).resolveInner(pos, 1); n; n = n.parent) {
-              if (n.name !== 'Link') continue;
-              const url = n.getChild('URL');
-              if (url) openLink(view.state.sliceDoc(url.from, url.to));
+              let url: SyntaxNode | null;
+              if (n.name === 'Link') url = n.getChild('URL');
+              else if (n.name === 'URL' && !isLinkLike(n.parent)) url = n;
+              else continue;
+              if (url) {
+                const href = view.state.sliceDoc(url.from, url.to);
+                openLink(/^www\./i.test(href) ? `https://${href}` : href);
+              }
               e.preventDefault();
               return true;
             }
