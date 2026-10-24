@@ -226,12 +226,26 @@ function itemNumber(state: EditorState, item: SyntaxNode) {
   return start + index;
 }
 
-/** «3.1.2.» — номера всех нумерованных пунктов-предков */
+/** Разделитель нумерованного списка, как набран в исходнике: «.» или «)» (иначе «.») */
+function listDelim(state: EditorState, item: SyntaxNode) {
+  const mark = item.parent?.firstChild?.getChild('ListMark');
+  const m = mark ? /[.)]$/.exec(state.sliceDoc(mark.from, mark.to)) : null;
+  return m ? m[0] : '.';
+}
+
+/** «3.1.2.» / «3.1.2)» — номера всех нумерованных пунктов-предков; разделитель — как в исходнике */
 function outlineNumber(state: EditorState, item: SyntaxNode) {
   const parts: number[] = [];
   for (let n: SyntaxNode | null = item; n; n = n.parent)
     if (n.name === 'ListItem' && n.parent?.name === 'OrderedList') parts.unshift(itemNumber(state, n));
-  return `${parts.join('.')}.`;
+  return `${parts.join('.')}${listDelim(state, item)}`;
+}
+
+/** Текст маркера пункта вне курсора: «• •» по уровню вложенности или номер «3.1.» / «3.1)» */
+export function listMarker(state: EditorState, item: SyntaxNode) {
+  const list = item.parent;
+  if (list?.name === 'BulletList') return Array(listDepth(item)).fill('•').join(' ');
+  return list?.name === 'OrderedList' ? outlineNumber(state, item) : '';
 }
 
 // ------------------------------------------------------------------ оформление по дереву
@@ -385,11 +399,7 @@ function build(view: EditorView, ctx: BuildContext): DecorationSet {
             add(node.from, Math.min(node.to + 1, state.doc.lineAt(node.from).to), hide);
             return;
           }
-          const text =
-            parent.parent!.name === 'BulletList'
-              ? Array(listDepth(parent)).fill('•').join(' ')
-              : outlineNumber(state, parent);
-          add(node.from, node.to, Decoration.replace({ widget: new ListMarkWidget(text) }));
+          add(node.from, node.to, Decoration.replace({ widget: new ListMarkWidget(listMarker(state, parent)) }));
           return;
         }
         if (name === 'TaskMarker') {
