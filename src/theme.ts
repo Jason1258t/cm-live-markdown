@@ -85,6 +85,21 @@ export const liveMarkdownTheme = EditorView.baseTheme({
     paddingLeft: '12px !important',
     color: 'var(--lmd-muted, #808080)',
   },
+  '.lmd-labeled-rule': {
+    display: 'inline-flex',
+    width: '100%',
+    alignItems: 'center',
+    gap: '12px',
+    color: 'var(--lmd-muted, #808080)',
+    verticalAlign: 'middle',
+  },
+  '.lmd-labeled-rule::before, .lmd-labeled-rule::after': {
+    content: '""',
+    flex: '1',
+    minWidth: '12px',
+    height: '1px',
+    background: 'var(--lmd-rule, rgba(127, 127, 127, 0.35))',
+  },
   '.lmd-hr': {
     height: '0.8em',
     background:

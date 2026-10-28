@@ -93,6 +93,29 @@ export const refreshLivePreview = StateEffect.define<null>();
 
 // ------------------------------------------------------------------ виджеты
 
+/** Оформление не меняет исходник: при наведении курсора снова видна разметка. */
+class TypographyWidget extends WidgetType {
+  readonly text: string;
+  readonly divider: boolean;
+  constructor(text: string, divider = false) {
+    super();
+    this.text = text;
+    this.divider = divider;
+  }
+  eq(other: TypographyWidget) {
+    return this.text === other.text && this.divider === other.divider;
+  }
+  toDOM() {
+    const dom = document.createElement('span');
+    dom.textContent = this.text;
+    if (this.divider) dom.className = 'lmd-labeled-rule';
+    return dom;
+  }
+  ignoreEvent() {
+    return false;
+  }
+}
+
 class TokenWidget extends WidgetType {
   readonly text: string;
   readonly match: RegExpExecArray;
@@ -289,6 +312,7 @@ function build(view: EditorView, ctx: BuildContext): DecorationSet {
   const add = (from: number, to: number, deco: Decoration) => out.push({ from, to, deco });
   const addLine = (pos: number, deco: Decoration) => out.push({ from: pos, to: pos, deco });
   const codeRanges: [number, number][] = [];
+  const labeledRanges: [number, number][] = [];
 
   for (const { from, to } of view.visibleRanges) {
     // Токены не часть грамматики Markdown (парсер может увидеть в них ссылку) — ищем регулярками
@@ -311,8 +335,22 @@ function build(view: EditorView, ctx: BuildContext): DecorationSet {
       to,
       enter: (node) => {
         if (found.some((t) => node.from >= t.from && node.to <= t.to)) return false;
+        if (labeledRanges.some(([a, b]) => node.from >= a && node.to <= b)) return false;
         const name = node.name;
         const parent = node.node.parent;
+
+        // Разделитель с подписью занимает отдельную строку обычного абзаца.
+        if (name === 'Paragraph' && parent?.name === 'Document') {
+          const paragraph = state.sliceDoc(node.from, node.to);
+          for (const label of paragraph.matchAll(/^ {0,3}---[ \t]+(\S(?:[^\n]*?\S)?)[ \t]+---[ \t]*$/gm)) {
+            const start = node.from + label.index;
+            const end = start + label[0].length;
+            if (!activeLine(start)) {
+              labeledRanges.push([start, end]);
+              add(start, end, Decoration.replace({ widget: new TypographyWidget(label[1], true) }));
+            }
+          }
+        }
 
         const heading = /^ATXHeading(\d)$/.exec(name);
         if (heading) {
@@ -412,6 +450,23 @@ function build(view: EditorView, ctx: BuildContext): DecorationSet {
         }
       },
     });
+
+    // Только отдельное двойное тире в обычном тексте: URL, код и пользовательские токены сохраняем.
+    for (const match of text.matchAll(/(?<![\S\\])--(?!\S)/g)) {
+      const start = from + match.index;
+      const end = start + 2;
+      if (touched(start, end) || found.some((t) => start < t.to && end > t.from)) continue;
+      let node: SyntaxNode | null = syntaxTree(state).resolveInner(start, 1);
+      let plain = true;
+      while (node) {
+        if (/Code|Link|URL|Image|HTML|HorizontalRule|Table|Escape/.test(node.name)) {
+          plain = false;
+          break;
+        }
+        node = node.parent;
+      }
+      if (plain) add(start, end, Decoration.replace({ widget: new TypographyWidget('—') }));
+    }
 
     for (const t of found) {
       if (codeRanges.some(([a, b]) => t.from >= a && t.to <= b)) continue;
