@@ -1,9 +1,16 @@
-import { markdownLanguage } from '@codemirror/lang-markdown';
 import { EditorSelection, EditorState, type StateCommand, type Transaction } from '@codemirror/state';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { deleteListMarker, insertLink, shiftLists, tableCell, toggleTask, wrap } from '../src/commands.ts';
-import { imageSources } from '../src/live.ts';
+import {
+  continueLetterList,
+  deleteListMarker,
+  insertLink,
+  shiftLists,
+  tableCell,
+  toggleTask,
+  wrap,
+} from '../src/commands.ts';
+import { imageSources, liveMarkdownLanguage } from '../src/live.ts';
 
 /**
  * Проверки команд на состояниях CodeMirror, без браузера.
@@ -14,10 +21,14 @@ function state(text: string) {
   if (sel >= 0) {
     const end = text.indexOf('>') - 1;
     const doc = text.replace('<', '').replace('>', '');
-    return EditorState.create({ doc, selection: EditorSelection.single(sel, end), extensions: markdownLanguage });
+    return EditorState.create({ doc, selection: EditorSelection.single(sel, end), extensions: liveMarkdownLanguage });
   }
   const head = text.indexOf('^');
-  return EditorState.create({ doc: text.replace('^', ''), selection: { anchor: head }, extensions: markdownLanguage });
+  return EditorState.create({
+    doc: text.replace('^', ''),
+    selection: { anchor: head },
+    extensions: liveMarkdownLanguage,
+  });
 }
 
 function show(s: EditorState) {
@@ -65,6 +76,34 @@ describe('Tab / Shift+Tab в списках', () => {
   });
   test('не список — обычный отступ', () => {
     assert.equal(apply(shiftLists(1), 'текст^'), '  текст^');
+  });
+});
+
+describe('буквенные списки', () => {
+  test('Enter — следующая буква, текст после курсора уходит в новый пункт', () => {
+    assert.equal(apply(continueLetterList, 'а) раз^'), 'а) раз\nб) ^');
+    assert.equal(apply(continueLetterList, 'a) раз^два'), 'a) раз\nb) ^два');
+    assert.equal(apply(continueLetterList, 'A) раз^'), 'A) раз\nB) ^');
+  });
+  test('Enter посреди списка сдвигает следующие буквы', () => {
+    assert.equal(apply(continueLetterList, 'а) раз^\nб) два\nв) три'), 'а) раз\nб) ^\nв) два\nг) три');
+  });
+  test('Enter во вложенном и с чекбоксом', () => {
+    assert.equal(apply(continueLetterList, '1. раз\n   а) [ ] под^'), '1. раз\n   а) [ ] под\n   б) [ ] ^');
+  });
+  test('Enter в пустом пункте заканчивает список', () => {
+    assert.equal(apply(continueLetterList, 'а) раз\nб) ^'), 'а) раз\n^');
+  });
+  test('не буквенный пункт и строка абзаца — не наше дело', () => {
+    assert.equal(run(continueLetterList, '1. раз^').handled, false);
+    assert.equal(run(continueLetterList, 'Текст\nб) дальше^').handled, false);
+  });
+  test('Tab вкладывает буквенный пункт и начинает с «а)»', () => {
+    assert.equal(apply(shiftLists(1), '1. раз\n2. ^два'), '1. раз\n   1. ^два');
+    assert.equal(apply(shiftLists(1), 'а) раз\nб) ^два'), 'а) раз\n   а) ^два');
+  });
+  test('Backspace за буквой снимает маркер', () => {
+    assert.equal(apply(deleteListMarker, 'а) ^раз'), '^раз');
   });
 });
 

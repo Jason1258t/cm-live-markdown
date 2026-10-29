@@ -3,7 +3,7 @@
 Живой Markdown для [CodeMirror 6](https://codemirror.net) — как Live Preview в Obsidian. Текст остаётся обычным Markdown, оформление рисуется поверх, а служебные символы видны только там, где стоит курсор. Без фокуса весь текст показан оформлённым, как в просмотре.
 
 - Заголовки, **жирный**, _курсив_, `код`, ~~зачёркнутое~~, ссылки (Ctrl/Cmd+клик — открыть), цитаты, блоки кода, горизонтальная линия.
-- Списки: маркеры «•», «• •» по уровню вложенности и нумерация «3.1.» — с тем разделителем, что набран в исходнике («1)» остаётся «1)», вложенный «1.1)»); чекбоксы `- [ ]` кликаются.
+- Списки: маркеры «•», «• •» по уровню вложенности и нумерация «3.1.» — с тем разделителем, что набран в исходнике («1)» остаётся «1)», вложенный «1.1)»); буквенные `a)` / `б)` (расширение `letterLists`, в CommonMark их нет); чекбоксы `- [ ]` кликаются.
 - Таблицы вне курсора отрисованы, клик по ячейке раскрывает исходник на нужной строке.
 - Картинки `![подпись](адрес)` — свой преобразователь адреса, вставка и перетаскивание файлов.
 - Свои строчные токены: упоминания, теги, ссылки на сущности — регулярка и функция отрисовки значка.
@@ -15,7 +15,7 @@
 ## Установка
 
 ```bash
-npm i cm-live-markdown @codemirror/state @codemirror/view @codemirror/language @codemirror/lang-markdown @codemirror/commands @lezer/common
+npm i cm-live-markdown @codemirror/state @codemirror/view @codemirror/language @codemirror/lang-markdown @codemirror/commands @lezer/common @lezer/markdown
 ```
 
 Пакеты `@codemirror/*` — peer-зависимости: используется та же копия, что у вас в проекте. React (≥ 18) нужен только для `cm-live-markdown/react`. Пакет только ESM.
@@ -78,7 +78,7 @@ liveMarkdown({
     imageNotFound: 'Картинка не найдена',
     tableHint: 'Нажмите, чтобы править таблицу',
   },
-  language: true, // false — подключите свой markdown()
+  language: true, // false — подключите свой markdown({ extensions: letterLists })
   keymap: true, // false — без сочетаний
   theme: true, // false — только ваш CSS
   openLink: (url) => window.open(url, '_blank', 'noreferrer'),

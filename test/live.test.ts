@@ -3,11 +3,11 @@ import { syntaxTree } from '@codemirror/language';
 import { EditorState } from '@codemirror/state';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { isPlainBrackets, listMarker } from '../src/live.ts';
+import { isPlainBrackets, listMarker, liveMarkdownLanguage } from '../src/live.ts';
 
 /** Тексты маркеров пунктов по порядку — как их увидит редактор вне курсора */
 function markers(doc: string) {
-  const state = EditorState.create({ doc, extensions: markdownLanguage });
+  const state = EditorState.create({ doc, extensions: liveMarkdownLanguage });
   const out: string[] = [];
   syntaxTree(state).iterate({
     enter: (n) => {
@@ -29,6 +29,18 @@ describe('маркер пункта вне курсора', () => {
   });
   test('маркированный: точки по уровню вложенности', () => {
     assert.deepEqual(markers('- раз\n  - два'), ['•', '• •']);
+  });
+  test('буквенный «а) / б)» — буквы как набраны, и после строки текста', () => {
+    assert.deepEqual(markers('a) раз\nb) два'), ['a)', 'b)']);
+    assert.deepEqual(markers('Варианты:\nа) раз\nб) два'), ['а)', 'б)']);
+  });
+  test('буквенный внутри нумерованного', () => {
+    assert.deepEqual(markers('1. раз\n   а) подпункт\n   б) ещё\n2. два'), ['1.', 'а)', 'б)', '2.']);
+  });
+  test('не список: «б)» посреди абзаца, «а)» без пробела, «т. е.»', () => {
+    assert.deepEqual(markers('Текст\nб) дальше'), []);
+    assert.deepEqual(markers('а)слитно'), []);
+    assert.deepEqual(markers('т. е. так'), []);
   });
 });
 
