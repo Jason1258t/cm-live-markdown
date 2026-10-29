@@ -288,6 +288,32 @@ const HIDDEN_MARKS = new Set(['EmphasisMark', 'StrikethroughMark', 'LinkMark', '
 /** Адрес внутри [текст](адрес) или ![](адрес) — служебная часть, прячется вне курсора */
 const isLinkLike = (node: SyntaxNode | null) => node?.name === 'Link' || node?.name === 'Image';
 
+const normLabel = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** Подписи сносок `[подпись]: адрес` документа — они стоят только на верхнем уровне */
+function linkDefinitions(state: EditorState) {
+  const labels = new Set<string>();
+  for (let n = syntaxTree(state).topNode.firstChild; n; n = n.nextSibling) {
+    if (n.name !== 'LinkReference') continue;
+    const label = n.getChild('LinkLabel');
+    if (label) labels.add(normLabel(state.sliceDoc(label.from + 1, label.to - 1)));
+  }
+  return labels;
+}
+
+/**
+ * Ссылка без адреса — `[текст]`, `[текст][]`, `[текст][метка]` или `![подпись]` — и без сноски с такой меткой.
+ * Парсер считает её ссылкой, а при показе это обычный текст в скобках: скобки не прячем.
+ */
+export function isPlainBrackets(state: EditorState, node: SyntaxNode, definitions = linkDefinitions(state)) {
+  if (!isLinkLike(node) || node.getChild('URL')) return false;
+  const marks = node.getChildren('LinkMark');
+  const label = node.getChild('LinkLabel');
+  let text = label ? state.sliceDoc(label.from + 1, label.to - 1) : '';
+  if (!normLabel(text) && marks.length >= 2) text = state.sliceDoc(marks[0].to, marks[1].from);
+  return !definitions.has(normLabel(text));
+}
+
 interface BuildContext {
   tokens: readonly InlineToken[];
   images: ImageOptions | false;
@@ -313,6 +339,7 @@ function build(view: EditorView, ctx: BuildContext): DecorationSet {
   const addLine = (pos: number, deco: Decoration) => out.push({ from: pos, to: pos, deco });
   const codeRanges: [number, number][] = [];
   const labeledRanges: [number, number][] = [];
+  const definitions = linkDefinitions(state);
 
   for (const { from, to } of view.visibleRanges) {
     // Токены не часть грамматики Markdown (парсер может увидеть в них ссылку) — ищем регулярками
@@ -363,6 +390,14 @@ function build(view: EditorView, ctx: BuildContext): DecorationSet {
             const end = Math.min(node.to + 1, state.doc.lineAt(node.from).to);
             add(node.from, end, hide);
           }
+          return;
+        }
+        // [текст] без адреса — обычный текст: скобки видны, внутри работает остальное оформление
+        if (isLinkLike(node.node) && isPlainBrackets(state, node.node, definitions)) return;
+        if (name === 'LinkMark' && parent && isPlainBrackets(state, parent, definitions)) return;
+        // \[ и подобные — обратная черта прячется вне курсора, остаётся сам знак
+        if (name === 'Escape') {
+          if (!touched(node.from, node.to)) add(node.from, node.from + 1, hide);
           return;
         }
         if (name === 'Image') {
@@ -712,6 +747,7 @@ export function liveMarkdown(options: LiveMarkdownOptions = {}): Extension {
             if (pos === null) return false;
             for (let n: SyntaxNode | null = syntaxTree(view.state).resolveInner(pos, 1); n; n = n.parent) {
               let url: SyntaxNode | null;
+              if (isPlainBrackets(view.state, n)) continue;
               if (n.name === 'Link') url = n.getChild('URL');
               else if (n.name === 'URL' && !isLinkLike(n.parent)) url = n;
               else continue;
