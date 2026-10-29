@@ -1,6 +1,9 @@
 import { indentLess, indentMore } from '@codemirror/commands';
 import { EditorSelection, type ChangeSpec, type EditorState, type StateCommand } from '@codemirror/state';
+import { syntaxTree } from '@codemirror/language';
 import type { KeyBinding } from '@codemirror/view';
+import type { SyntaxNode } from '@lezer/common';
+import { letterIndex, nextLetter } from './letters.ts';
 
 /**
  * Команды «живого» Markdown: вложенность списков и сочетания оформления.
@@ -9,14 +12,17 @@ import type { KeyBinding } from '@codemirror/view';
 
 // ------------------------------------------------------------------ списки: Tab / Shift+Tab
 
-/** Пункт списка: отступ, маркер (`-`, `*`, `+`, `1.`, `1)`), пробелы после него */
-const LIST_LINE = /^(\s*)([-*+]|(\d+)([.)]))(\s+)/;
+/** Пункт списка: отступ, маркер (`-`, `*`, `+`, `1.`, `1)`, `a)`, `б)`), пробелы после него */
+const LIST_LINE = /^(\s*)([-*+]|(\d+)([.)])|([a-zа-яё])(\)))(\s+)/i;
 
 interface ListLine {
   indent: number;
   marker: string;
+  /** Номер пункта; у буквенного — место буквы в алфавите (a, а — 1) */
   num?: number;
   delim?: string;
+  /** Буква буквенного пункта */
+  letter?: string;
   /** Колонка текста пункта — сюда встаёт отступ вложенного */
   content: number;
 }
@@ -27,11 +33,17 @@ function parseList(text: string): ListLine | null {
   return {
     indent: m[1].length,
     marker: m[2],
-    num: m[3] ? Number(m[3]) : undefined,
-    delim: m[4],
+    num: m[3] ? Number(m[3]) : m[5] ? letterIndex(m[5]) + 1 : undefined,
+    delim: m[4] ?? m[6],
+    letter: m[5],
     content: m[0].length,
   };
 }
+
+/** Маркер пункта того же вида с номером n: «3.» или «в)» */
+const label = (item: ListLine, n: number) => `${item.letter ? nextLetter(item.letter, n - item.num!) : n}${item.delim}`;
+/** Нумерация одного вида: цифры с цифрами, буквы с буквами */
+const sameKind = (a: ListLine, b: ListLine) => !a.letter === !b.letter;
 
 const indentOf = (text: string) => /^\s*/.exec(text)![0].length;
 
@@ -70,7 +82,7 @@ function shiftItem(state: EditorState, lineNo: number, dir: 1 | -1): ChangeSpec[
       for (let n = lineNo - 1; n >= 1; n--) {
         const prev = parseList(doc.line(n).text);
         if (!prev || prev.indent < target) break;
-        if (prev.indent === target && prev.num !== undefined) {
+        if (prev.indent === target && prev.num !== undefined && sameKind(prev, item)) {
           number = prev.num + 1;
           break;
         }
@@ -87,7 +99,7 @@ function shiftItem(state: EditorState, lineNo: number, dir: 1 | -1): ChangeSpec[
       const parent = parseList(doc.line(n).text);
       if (parent && parent.indent < item.indent) {
         target = parent.indent;
-        if (item.num !== undefined && parent.num !== undefined) number = parent.num + 1;
+        if (item.num !== undefined && parent.num !== undefined && sameKind(parent, item)) number = parent.num + 1;
         break;
       }
     }
@@ -104,7 +116,7 @@ function shiftItem(state: EditorState, lineNo: number, dir: 1 | -1): ChangeSpec[
   reindent(lineNo);
   if (number !== undefined) {
     const from = line.from + item.indent;
-    changes.push({ from, to: from + item.marker.length, insert: `${number}${item.delim}` });
+    changes.push({ from, to: from + item.marker.length, insert: label(item, number) });
   }
   // Вложенные строки пункта (отступ больше нашего) едут вместе с ним
   for (let n = lineNo + 1; n <= doc.lines; n++) {
@@ -122,7 +134,7 @@ function shiftItem(state: EditorState, lineNo: number, dir: 1 | -1): ChangeSpec[
         changes.push({
           from: l.from + next.indent,
           to: l.from + next.indent + next.marker.length,
-          insert: `1${next.delim}`,
+          insert: label(next, 1),
         });
       }
       break;
@@ -231,7 +243,7 @@ export const insertLink: StateCommand = ({ state, dispatch }) => {
   return true;
 };
 
-const TASK = /^(\s*(?:[-*+]|\d+[.)])\s+)\[([ xX])\]/;
+const TASK = /^(\s*(?:[-*+]|\d+[.)]|[a-zа-яё]\))\s+)\[([ xX])\]/i;
 
 /** Ctrl+Enter: переключить чекбокс; пункт без чекбокса или обычная строка — сделать чекбоксом */
 export const toggleTask: StateCommand = ({ state, dispatch }) => {
@@ -311,6 +323,49 @@ export const deleteListMarker: StateCommand = ({ state, dispatch }) => {
   return true;
 };
 
+/**
+ * Enter в буквенном пункте «б) …»: новый пункт «в) », следующие пункты сдвигаются по алфавиту.
+ * В пустом пункте — снять маркер и закончить список. Цифры и «-» продолжает стандартный Enter из lang-markdown.
+ */
+export const continueLetterList: StateCommand = ({ state, dispatch }) => {
+  const r = state.selection.main;
+  if (!r.empty || state.selection.ranges.length > 1) return false;
+  const line = state.doc.lineAt(r.head);
+  const item = parseList(line.text);
+  if (!item?.letter || r.head < line.from + item.content) return false;
+  // Только настоящий пункт списка: не код и не строка абзаца, которую список прервать не может
+  let inList = false;
+  for (let n: SyntaxNode | null = syntaxTree(state).resolveInner(line.from + item.indent, 1); n; n = n.parent)
+    if (n.name === 'LetterList') inList = true;
+  if (!inList) return false;
+
+  const task = /^\[[ xX]\]\s+/.exec(line.text.slice(item.content));
+  const body = line.text.slice(item.content + (task ? task[0].length : 0));
+  if (!body.trim()) {
+    dispatch(state.update({ changes: { from: line.from, to: line.to }, userEvent: 'delete', scrollIntoView: true }));
+    return true;
+  }
+
+  const spaces = line.text.slice(item.indent + item.marker.length, item.content);
+  const rest = state.sliceDoc(r.head, line.to);
+  const insert = `\n${' '.repeat(item.indent)}${label(item, item.num! + 1)}${spaces}${task ? '[ ] ' : ''}`;
+  const changes: ChangeSpec[] = [{ from: r.head, to: r.head + rest.length - rest.trimStart().length, insert }];
+  // Следующие пункты того же списка — на букву дальше; вложенные строки и пустые пропускаем
+  let num = item.num! + 2;
+  for (let n = line.number + 1; n <= state.doc.lines; n++) {
+    const l = state.doc.line(n);
+    if (!l.text.trim() || indentOf(l.text) > item.indent) continue;
+    const next = parseList(l.text);
+    if (!next?.letter || next.indent !== item.indent || next.delim !== item.delim) break;
+    const want = label(item, num++);
+    if (next.marker !== want)
+      changes.push({ from: l.from + next.indent, to: l.from + next.indent + next.marker.length, insert: want });
+  }
+  const sel = state.changes(changes).mapPos(r.head, 1);
+  dispatch(state.update({ changes, selection: { anchor: sel }, userEvent: 'input', scrollIntoView: true }));
+  return true;
+};
+
 /** Сочетания живого Markdown. Ставить с Prec.high — раньше стандартных Tab и Backspace */
 export const liveMarkdownKeymap: readonly KeyBinding[] = [
   { key: 'Backspace', run: deleteListMarker },
@@ -322,4 +377,5 @@ export const liveMarkdownKeymap: readonly KeyBinding[] = [
   { key: 'Mod-Shift-x', run: wrap('~~') },
   { key: 'Mod-k', run: insertLink },
   { key: 'Mod-Enter', run: toggleTask },
+  { key: 'Enter', run: continueLetterList },
 ];

@@ -1,5 +1,5 @@
 import { markdownKeymap, markdownLanguage } from '@codemirror/lang-markdown';
-import { syntaxTree } from '@codemirror/language';
+import { Language, syntaxTree } from '@codemirror/language';
 import { Prec, RangeSetBuilder, StateEffect, StateField, type EditorState, type Extension } from '@codemirror/state';
 import {
   Decoration,
@@ -12,6 +12,8 @@ import {
 } from '@codemirror/view';
 import type { SyntaxNode } from '@lezer/common';
 import { liveMarkdownKeymap } from './commands.ts';
+import type { MarkdownParser } from '@lezer/markdown';
+import { letterLists } from './letters.ts';
 import { liveMarkdownTheme } from './theme.ts';
 
 /**
@@ -78,7 +80,7 @@ export interface LiveMarkdownOptions {
   /** Таблицы вне курсора отрисованы; `false` — оставить текстом */
   tables?: TableOptions | false;
   phrases?: Partial<Phrases>;
-  /** Язык Markdown (GFM) из @codemirror/lang-markdown. `false` — подключите свой `markdown()` сами */
+  /** Язык Markdown (GFM) с буквенными списками. `false` — подключите свой `markdown()` сами (с `letterLists`) */
   language?: boolean;
   /** Сочетания живого Markdown и продолжение списков по Enter (по умолчанию включены) */
   keymap?: boolean;
@@ -231,7 +233,8 @@ class ImageWidget extends WidgetType {
 
 // ------------------------------------------------------------------ списки
 
-const isList = (n: SyntaxNode | null) => n?.name === 'BulletList' || n?.name === 'OrderedList';
+const isList = (n: SyntaxNode | null) =>
+  n?.name === 'BulletList' || n?.name === 'OrderedList' || n?.name === 'LetterList';
 
 /** Уровень пункта: сколько списков над ним (1 — верхний) */
 function listDepth(item: SyntaxNode) {
@@ -264,10 +267,14 @@ function outlineNumber(state: EditorState, item: SyntaxNode) {
   return `${parts.join('.')}${listDelim(state, item)}`;
 }
 
-/** Текст маркера пункта вне курсора: «• •» по уровню вложенности или номер «3.1.» / «3.1)» */
+/** Текст маркера пункта вне курсора: «• •» по уровню вложенности, номер «3.1.» / «3.1)» или буква «б)» как набрана */
 export function listMarker(state: EditorState, item: SyntaxNode) {
   const list = item.parent;
   if (list?.name === 'BulletList') return Array(listDepth(item)).fill('•').join(' ');
+  if (list?.name === 'LetterList') {
+    const mark = item.getChild('ListMark');
+    return mark ? state.sliceDoc(mark.from, mark.to) : '';
+  }
   return list?.name === 'OrderedList' ? outlineNumber(state, item) : '';
 }
 
@@ -699,6 +706,17 @@ function imageExtensions(opts: ImageOptions): Extension[] {
 
 // ------------------------------------------------------------------ сборка
 
+/**
+ * Язык Markdown (GFM) с буквенными списками «a) / б)». Свой `markdown()` — добавьте в него `letterLists`.
+ * Не через markdown(): тот тянет подсветку HTML/CSS/JS (~100 КБ), а нужна только разметка.
+ */
+export const liveMarkdownLanguage = new Language(
+  markdownLanguage.data,
+  (markdownLanguage.parser as MarkdownParser).configure(letterLists),
+  [],
+  'markdown',
+);
+
 /** Живой Markdown для CodeMirror 6 — одно расширение со всеми частями */
 export function liveMarkdown(options: LiveMarkdownOptions = {}): Extension {
   const phrases: Phrases = { ...defaultPhrases, ...options.phrases };
@@ -766,8 +784,7 @@ export function liveMarkdown(options: LiveMarkdownOptions = {}): Extension {
   );
 
   const ext: Extension[] = [];
-  // Без markdown(): тот тянет подсветку HTML/CSS/JS (~100 КБ), а нужна только разметка
-  if (options.language !== false) ext.push(markdownLanguage);
+  if (options.language !== false) ext.push(liveMarkdownLanguage);
   if (options.keymap !== false)
     // Свои команды раньше стандартных: Tab/Shift+Tab — вложенность списков и ячейки таблиц, Backspace за маркером,
     // Ctrl+B/I/E/K, Ctrl+Enter — чекбокс; затем Enter продолжает список
